@@ -46,7 +46,7 @@ class TestBackendRegistry:
 
 class TestPyenvVenvWinBackend:
     def _make_backend(self, tmp_path: Path) -> PyenvVenvWinBackend:
-        return PyenvVenvWinBackend(pyenv_root=tmp_path)
+        return PyenvVenvWinBackend(pyenv_root=tmp_path, venv_root=tmp_path / "venvs")
 
     def test_name(self, tmp_path):
         backend = self._make_backend(tmp_path)
