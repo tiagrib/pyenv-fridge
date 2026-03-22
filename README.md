@@ -67,6 +67,12 @@ The only runtime dependency is the Python standard library (≥ 3.9).
 ### Windows (pyenv-win-venv / `pyenv-venv`)
 
 ```powershell
+# (Optional) Point backups at a cloud-synced folder
+fridge config set backup_dir "C:\Users\you\OneDrive\pyenv-fridge"
+
+# Show the active configuration
+fridge config show
+
 # Back up every virtual environment
 fridge backup
 
