@@ -22,7 +22,6 @@ def _make_config(tmp_path: Path) -> FridgeConfig:
         backup_dir=tmp_path / "backups",
         backend="pyenv-venv-win",
         package_manager="pip",
-        config_path=tmp_path / "config.json",
     )
 
 
@@ -144,7 +143,7 @@ class TestFridgeBackupEnv:
         assert backup.python_version == "3.11.5"
         assert len(backup.packages) == 2
 
-        backup_file = config.backup_dir / "myenv.json"
+        backup_file = config.envs_dir / "myenv.json"
         assert backup_file.exists()
 
         loaded = EnvBackup.from_file(str(backup_file))
@@ -223,10 +222,10 @@ class TestFridgeListBackups:
 
     def test_list_backups_returns_all(self, tmp_path):
         config = _make_config(tmp_path)
-        config.backup_dir.mkdir(parents=True)
+        config.envs_dir.mkdir(parents=True)
         for name in ("alpha", "beta", "gamma"):
             b = EnvBackup(name=name, python_version="3.11.5", packages=[])
-            b.save(str(config.backup_dir / f"{name}.json"))
+            b.save(str(config.envs_dir / f"{name}.json"))
 
         backend = _make_mock_backend()
         pm = _make_mock_pm()
@@ -248,7 +247,7 @@ class TestFridgeDiffEnv:
 
     def test_diff_env_detects_changes(self, tmp_path):
         config = _make_config(tmp_path)
-        config.backup_dir.mkdir(parents=True)
+        config.envs_dir.mkdir(parents=True)
 
         backup = EnvBackup(
             name="myenv",
@@ -258,7 +257,7 @@ class TestFridgeDiffEnv:
                 PackageInfo(name="removed-pkg", version="0.1.0"),
             ],
         )
-        backup.save(str(config.backup_dir / "myenv.json"))
+        backup.save(str(config.envs_dir / "myenv.json"))
 
         backend = _make_mock_backend(python_exe="/path/python")
         pm = _make_mock_pm(
@@ -280,9 +279,9 @@ class TestFridgeDiffEnv:
 
     def test_diff_env_custom_python_executable(self, tmp_path):
         config = _make_config(tmp_path)
-        config.backup_dir.mkdir(parents=True)
+        config.envs_dir.mkdir(parents=True)
         backup = EnvBackup(name="myenv", python_version="3.11.5", packages=[])
-        backup.save(str(config.backup_dir / "myenv.json"))
+        backup.save(str(config.envs_dir / "myenv.json"))
 
         backend = _make_mock_backend()
         pm = _make_mock_pm()
@@ -303,14 +302,14 @@ class TestFridgeRestoreEnv:
 
     def test_restore_creates_env_when_missing(self, tmp_path):
         config = _make_config(tmp_path)
-        config.backup_dir.mkdir(parents=True)
+        config.envs_dir.mkdir(parents=True)
 
         backup = EnvBackup(
             name="myenv",
             python_version="3.11.5",
             packages=[PackageInfo(name="numpy", version="1.24.0")],
         )
-        backup.save(str(config.backup_dir / "myenv.json"))
+        backup.save(str(config.envs_dir / "myenv.json"))
 
         backend = _make_mock_backend(python_exe="/nonexistent/python")
         pm = _make_mock_pm()
@@ -323,10 +322,10 @@ class TestFridgeRestoreEnv:
 
     def test_restore_no_create_missing_env_raises(self, tmp_path):
         config = _make_config(tmp_path)
-        config.backup_dir.mkdir(parents=True)
+        config.envs_dir.mkdir(parents=True)
 
         backup = EnvBackup(name="myenv", python_version="3.11.5", packages=[])
-        backup.save(str(config.backup_dir / "myenv.json"))
+        backup.save(str(config.envs_dir / "myenv.json"))
 
         backend = _make_mock_backend(python_exe="/nonexistent/python")
         pm = _make_mock_pm()
@@ -336,10 +335,10 @@ class TestFridgeRestoreEnv:
 
     def test_restore_reinstall_existing_env(self, tmp_path):
         config = _make_config(tmp_path)
-        config.backup_dir.mkdir(parents=True)
+        config.envs_dir.mkdir(parents=True)
 
         # Write a real Python executable path so Path(python_exe).exists() is True
-        python_dir = tmp_path / "envs" / "myenv"
+        python_dir = tmp_path / "python_envs" / "myenv"
         python_dir.mkdir(parents=True)
         python_exe = python_dir / "python"
         python_exe.touch()
@@ -349,7 +348,7 @@ class TestFridgeRestoreEnv:
             python_version="3.11.5",
             packages=[PackageInfo(name="numpy", version="1.24.0")],
         )
-        backup.save(str(config.backup_dir / "myenv.json"))
+        backup.save(str(config.envs_dir / "myenv.json"))
 
         backend = _make_mock_backend(python_exe=str(python_exe))
         pm = _make_mock_pm()

@@ -1,17 +1,15 @@
 """Configuration management for pyenv-fridge.
 
-The configuration is stored as a JSON file in an OS-appropriate location:
+The configuration file (``config.json``) lives inside the *backup directory*
+alongside the ``envs/`` sub-directory that holds environment snapshots:
 
-* **Windows**: ``%APPDATA%\\pyenv-fridge\\config.json``
-* **Linux / macOS**: ``$XDG_CONFIG_HOME/pyenv-fridge/config.json``
-  (falls back to ``~/.config/pyenv-fridge/config.json``)
+* **Windows**: ``%USERPROFILE%\\Documents\\pyenv-fridge\\config.json``
+* **Linux / macOS**: ``~/.local/share/pyenv-fridge/config.json``
 
-The default *backup directory* (where ``.json`` snapshot files are written) is:
-
-* **Windows**: ``%USERPROFILE%\\Documents\\pyenv-fridge``
-* **Linux / macOS**: ``~/.local/share/pyenv-fridge``
-
-Both paths can be overridden via the configuration file or programmatically.
+The backup directory can be overridden via ``fridge config set backup_dir …``.
+When the backup directory is changed, a copy of the configuration is also kept
+at the default location so that ``fridge`` can discover the redirect on the
+next invocation.
 """
 
 from __future__ import annotations
@@ -22,21 +20,6 @@ import platform
 import sys
 from pathlib import Path
 from typing import Any, Dict, Optional
-
-
-def _default_config_dir() -> Path:
-    """Return the OS-appropriate directory for the config file."""
-    system = platform.system()
-    if system == "Windows":
-        appdata = os.environ.get("APPDATA")
-        if appdata:
-            return Path(appdata) / "pyenv-fridge"
-        return Path.home() / "AppData" / "Roaming" / "pyenv-fridge"
-    # Linux / macOS – follow XDG Base Directory Specification
-    xdg = os.environ.get("XDG_CONFIG_HOME")
-    if xdg:
-        return Path(xdg) / "pyenv-fridge"
-    return Path.home() / ".config" / "pyenv-fridge"
 
 
 def _default_backup_dir() -> Path:
@@ -68,65 +51,92 @@ def _default_package_manager() -> str:
 class FridgeConfig:
     """Persistent configuration for pyenv-fridge.
 
-    Settings are loaded from (and saved to) a JSON file.  Any key may also be
-    overridden programmatically; call :meth:`save` to persist the changes.
+    The configuration file always lives at ``<backup_dir>/config.json``.
+    Environment snapshots are stored under ``<backup_dir>/envs/``.
 
     Attributes:
-        backup_dir: Directory where backup ``.json`` files are stored.
+        backup_dir: Root directory for pyenv-fridge data.
         backend: Virtualenv backend name (e.g. ``"pyenv-venv-win"``).
         package_manager: Package manager name (e.g. ``"pip"``).
-        config_path: Path to the JSON config file itself.
     """
 
     CONFIG_FILENAME = "config.json"
+    ENVS_DIRNAME = "envs"
 
     def __init__(
         self,
         backup_dir: Optional[Path] = None,
         backend: Optional[str] = None,
         package_manager: Optional[str] = None,
-        config_path: Optional[Path] = None,
     ) -> None:
-        self.config_path: Path = config_path or (
-            _default_config_dir() / self.CONFIG_FILENAME
-        )
         self.backup_dir: Path = backup_dir or _default_backup_dir()
         self.backend: str = backend or _default_backend()
         self.package_manager: str = package_manager or _default_package_manager()
+
+    @property
+    def config_path(self) -> Path:
+        """Path to the JSON config file (always ``backup_dir/config.json``)."""
+        return self.backup_dir / self.CONFIG_FILENAME
+
+    @property
+    def envs_dir(self) -> Path:
+        """Directory where environment snapshot JSON files are stored."""
+        return self.backup_dir / self.ENVS_DIRNAME
 
     # ------------------------------------------------------------------
     # Persistence
     # ------------------------------------------------------------------
 
-    def save(self) -> None:
-        """Write the current settings to :attr:`config_path`."""
-        self.config_path.parent.mkdir(parents=True, exist_ok=True)
+    def _write_config(self, path: Path) -> None:
+        """Serialise the current settings to *path*."""
+        path.parent.mkdir(parents=True, exist_ok=True)
         data: Dict[str, Any] = {
             "backup_dir": str(self.backup_dir),
             "backend": self.backend,
             "package_manager": self.package_manager,
         }
-        with open(self.config_path, "w", encoding="utf-8") as fh:
+        with open(path, "w", encoding="utf-8") as fh:
             json.dump(data, fh, indent=2)
 
-    @classmethod
-    def load(cls, config_path: Optional[Path] = None) -> "FridgeConfig":
-        """Load configuration from *config_path* (or the default location).
+    def save(self) -> None:
+        """Write the current settings to ``backup_dir/config.json``.
 
-        If the file does not exist a default configuration is returned (nothing
-        is written to disk until :meth:`save` is called).
+        If *backup_dir* differs from the platform default, a copy of the
+        configuration is also written to the default location so that
+        ``fridge`` can discover the redirect on the next invocation.
         """
-        path = config_path or (_default_config_dir() / cls.CONFIG_FILENAME)
-        cfg = cls(config_path=path)
+        self._write_config(self.config_path)
+        default_bd = _default_backup_dir()
+        if self.backup_dir.resolve() != default_bd.resolve():
+            self._write_config(default_bd / self.CONFIG_FILENAME)
+
+    @classmethod
+    def load(cls, backup_dir: Optional[Path] = None) -> "FridgeConfig":
+        """Load configuration from ``backup_dir/config.json``.
+
+        When *backup_dir* is ``None`` the default location is tried first.
+        If that file redirects to a different *backup_dir*, the configuration
+        is re-loaded from there.
+
+        If no file exists a default configuration is returned (nothing is
+        written to disk until :meth:`save` is called).
+        """
+        bd = backup_dir or _default_backup_dir()
+        path = bd / cls.CONFIG_FILENAME
+        cfg = cls(backup_dir=bd)
         if path.exists():
             with open(path, "r", encoding="utf-8") as fh:
                 data: Dict[str, Any] = json.load(fh)
-            if "backup_dir" in data:
-                cfg.backup_dir = Path(data["backup_dir"])
             if "backend" in data:
                 cfg.backend = data["backend"]
             if "package_manager" in data:
                 cfg.package_manager = data["package_manager"]
+            if "backup_dir" in data:
+                stored_bd = Path(data["backup_dir"])
+                if stored_bd.resolve() != bd.resolve():
+                    # Redirect: the real config lives in a different backup_dir.
+                    return cls.load(backup_dir=stored_bd)
+                cfg.backup_dir = stored_bd
         return cfg
 
     def to_dict(self) -> Dict[str, Any]:

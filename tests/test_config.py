@@ -8,31 +8,14 @@ from pathlib import Path
 
 import pytest
 
-from pyenv_fridge.config import FridgeConfig, _default_backup_dir, _default_config_dir
+from pyenv_fridge.config import FridgeConfig, _default_backup_dir
 
 
 class TestDefaultPaths:
-    def test_default_config_dir_returns_path(self):
-        result = _default_config_dir()
-        assert isinstance(result, Path)
-        assert "pyenv-fridge" in str(result)
-
     def test_default_backup_dir_returns_path(self):
         result = _default_backup_dir()
         assert isinstance(result, Path)
         assert "pyenv-fridge" in str(result)
-
-    def test_windows_appdata_env_var(self, monkeypatch, tmp_path):
-        monkeypatch.setenv("APPDATA", str(tmp_path))
-        monkeypatch.setattr(platform, "system", lambda: "Windows")
-        result = _default_config_dir()
-        assert result == tmp_path / "pyenv-fridge"
-
-    def test_linux_xdg_config_home(self, monkeypatch, tmp_path):
-        monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
-        monkeypatch.setattr(platform, "system", lambda: "Linux")
-        result = _default_config_dir()
-        assert result == tmp_path / "pyenv-fridge"
 
     def test_windows_backup_dir_userprofile(self, monkeypatch, tmp_path):
         monkeypatch.setenv("USERPROFILE", str(tmp_path))
@@ -48,77 +31,116 @@ class TestDefaultPaths:
 
 
 class TestFridgeConfig:
-    def test_defaults(self, tmp_path):
-        config_path = tmp_path / "config.json"
-        cfg = FridgeConfig(config_path=config_path)
+    def test_defaults(self):
+        cfg = FridgeConfig()
         assert isinstance(cfg.backup_dir, Path)
         assert cfg.backend in ("pyenv-venv-win", "pyenv-virtualenv")
         assert cfg.package_manager == "pip"
+
+    def test_config_path_derived_from_backup_dir(self, tmp_path):
+        cfg = FridgeConfig(backup_dir=tmp_path / "backups")
+        assert cfg.config_path == tmp_path / "backups" / "config.json"
+
+    def test_envs_dir_derived_from_backup_dir(self, tmp_path):
+        cfg = FridgeConfig(backup_dir=tmp_path / "backups")
+        assert cfg.envs_dir == tmp_path / "backups" / "envs"
 
     def test_custom_values(self, tmp_path):
         cfg = FridgeConfig(
             backup_dir=tmp_path / "backups",
             backend="pyenv-venv-win",
             package_manager="pip",
-            config_path=tmp_path / "config.json",
         )
         assert cfg.backup_dir == tmp_path / "backups"
         assert cfg.backend == "pyenv-venv-win"
 
-    def test_save_creates_file(self, tmp_path):
+    def test_save_creates_file(self, tmp_path, monkeypatch):
+        monkeypatch.setattr(
+            "pyenv_fridge.config._default_backup_dir", lambda: tmp_path / "backups"
+        )
         cfg = FridgeConfig(
             backup_dir=tmp_path / "backups",
             backend="pyenv-venv-win",
             package_manager="pip",
-            config_path=tmp_path / "config.json",
         )
         cfg.save()
-        assert (tmp_path / "config.json").exists()
-        data = json.loads((tmp_path / "config.json").read_text())
+        config_file = tmp_path / "backups" / "config.json"
+        assert config_file.exists()
+        data = json.loads(config_file.read_text())
         assert data["backend"] == "pyenv-venv-win"
         assert data["package_manager"] == "pip"
         assert "backup_dir" in data
 
-    def test_save_creates_parent_dirs(self, tmp_path):
-        nested = tmp_path / "a" / "b" / "c" / "config.json"
-        cfg = FridgeConfig(
-            backup_dir=tmp_path / "backups",
-            config_path=nested,
+    def test_save_creates_parent_dirs(self, tmp_path, monkeypatch):
+        monkeypatch.setattr(
+            "pyenv_fridge.config._default_backup_dir", lambda: tmp_path / "a" / "b" / "c"
         )
+        cfg = FridgeConfig(backup_dir=tmp_path / "a" / "b" / "c")
         cfg.save()
-        assert nested.exists()
+        assert (tmp_path / "a" / "b" / "c" / "config.json").exists()
+
+    def test_save_writes_redirect_when_not_default(self, tmp_path, monkeypatch):
+        default_dir = tmp_path / "default"
+        custom_dir = tmp_path / "custom"
+        monkeypatch.setattr(
+            "pyenv_fridge.config._default_backup_dir", lambda: default_dir
+        )
+        cfg = FridgeConfig(backup_dir=custom_dir)
+        cfg.save()
+        # Config written to both locations
+        assert (custom_dir / "config.json").exists()
+        assert (default_dir / "config.json").exists()
+        redirect_data = json.loads((default_dir / "config.json").read_text())
+        assert redirect_data["backup_dir"] == str(custom_dir)
 
     def test_load_nonexistent_returns_defaults(self, tmp_path):
-        cfg = FridgeConfig.load(config_path=tmp_path / "nonexistent.json")
+        cfg = FridgeConfig.load(backup_dir=tmp_path / "nonexistent")
         assert isinstance(cfg, FridgeConfig)
         assert cfg.package_manager == "pip"
 
-    def test_load_roundtrip(self, tmp_path):
+    def test_load_roundtrip(self, tmp_path, monkeypatch):
+        monkeypatch.setattr(
+            "pyenv_fridge.config._default_backup_dir", lambda: tmp_path / "mybackups"
+        )
         cfg = FridgeConfig(
             backup_dir=tmp_path / "mybackups",
             backend="pyenv-virtualenv",
             package_manager="pip",
-            config_path=tmp_path / "config.json",
         )
         cfg.save()
-        loaded = FridgeConfig.load(config_path=tmp_path / "config.json")
+        loaded = FridgeConfig.load(backup_dir=tmp_path / "mybackups")
         assert loaded.backup_dir == tmp_path / "mybackups"
         assert loaded.backend == "pyenv-virtualenv"
         assert loaded.package_manager == "pip"
 
-    def test_to_dict(self, tmp_path):
-        cfg = FridgeConfig(
-            backup_dir=tmp_path / "backups",
-            config_path=tmp_path / "config.json",
+    def test_load_follows_redirect(self, tmp_path, monkeypatch):
+        default_dir = tmp_path / "default"
+        custom_dir = tmp_path / "custom"
+        monkeypatch.setattr(
+            "pyenv_fridge.config._default_backup_dir", lambda: default_dir
         )
+        # Save config with custom backup_dir
+        cfg = FridgeConfig(
+            backup_dir=custom_dir,
+            backend="pyenv-virtualenv",
+            package_manager="pip",
+        )
+        cfg.save()
+        # Load from default — should follow redirect to custom
+        loaded = FridgeConfig.load()
+        assert loaded.backup_dir == custom_dir
+        assert loaded.backend == "pyenv-virtualenv"
+
+    def test_to_dict(self, tmp_path):
+        cfg = FridgeConfig(backup_dir=tmp_path / "backups")
         d = cfg.to_dict()
         assert "backup_dir" in d
         assert "backend" in d
         assert "package_manager" in d
         assert "config_path" in d
 
-    def test_repr(self, tmp_path):
-        cfg = FridgeConfig(config_path=tmp_path / "config.json")
+    def test_repr(self):
+        cfg = FridgeConfig()
         r = repr(cfg)
         assert "FridgeConfig" in r
         assert "pip" in r

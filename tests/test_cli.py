@@ -23,7 +23,6 @@ def _make_config(tmp_path: Path) -> FridgeConfig:
         backup_dir=tmp_path / "backups",
         backend="pyenv-venv-win",
         package_manager="pip",
-        config_path=tmp_path / "config.json",
     )
 
 
@@ -237,7 +236,8 @@ class TestCmdConfig:
 
     def test_config_set_backup_dir(self, tmp_path, capsys):
         config = _make_config(tmp_path)
-        with patch("pyenv_fridge.cli.FridgeConfig.load", return_value=config):
+        with patch("pyenv_fridge.cli.FridgeConfig.load", return_value=config), \
+             patch("pyenv_fridge.config._default_backup_dir", return_value=tmp_path / "backups"):
             code = main(["config", "set", "backup_dir", str(tmp_path / "newbackups")])
         assert code == 0
         assert config.backup_dir == tmp_path / "newbackups"

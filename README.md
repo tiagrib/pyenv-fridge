@@ -112,7 +112,7 @@ Capture the state of a virtual environment.
 |---|---|
 | `ENV` (optional) | Name of the environment to back up. Omit to back up **all** environments. |
 
-Backup files are written to `<backup_dir>/<ENV>.json`.
+Backup files are written to `<backup_dir>/envs/<ENV>.json`.
 
 ### `fridge restore ENV [--no-create] [--reinstall]`
 
@@ -177,12 +177,21 @@ Update a configuration value and persist it.
 
 ## Configuration
 
-Configuration is loaded from (and saved to) a JSON file:
+Everything lives under a single **backup directory**. The configuration file
+(`config.json`) and the environment snapshots (`envs/*.json`) share this root:
 
-| OS | Config file | Default backup directory |
-|---|---|---|
-| **Windows** | `%APPDATA%\pyenv-fridge\config.json` | `%USERPROFILE%\Documents\pyenv-fridge` |
-| **Linux / macOS** | `$XDG_CONFIG_HOME/pyenv-fridge/config.json` (or `~/.config/…`) | `$XDG_DATA_HOME/pyenv-fridge` (or `~/.local/share/…`) |
+| OS | Default backup directory |
+|---|---|
+| **Windows** | `%USERPROFILE%\Documents\pyenv-fridge` |
+| **Linux / macOS** | `$XDG_DATA_HOME/pyenv-fridge` (or `~/.local/share/pyenv-fridge`) |
+
+```
+pyenv-fridge/          # backup_dir
+├── config.json        # fridge configuration
+└── envs/
+    ├── my-env.json    # environment snapshots
+    └── other-env.json
+```
 
 ### Point backups at a cloud drive
 
@@ -196,7 +205,7 @@ fridge config set backup_dir "$HOME/Dropbox/pyenv-fridge"
 
 ## Backup file format
 
-Each snapshot is a single JSON file (`<env_name>.json`):
+Each snapshot is a single JSON file (`envs/<env_name>.json`):
 
 ```json
 {

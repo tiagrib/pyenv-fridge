@@ -69,12 +69,12 @@ class Fridge:
     # Internal helpers
     # ------------------------------------------------------------------
 
-    def _ensure_backup_dir(self) -> Path:
-        self.config.backup_dir.mkdir(parents=True, exist_ok=True)
-        return self.config.backup_dir
+    def _ensure_envs_dir(self) -> Path:
+        self.config.envs_dir.mkdir(parents=True, exist_ok=True)
+        return self.config.envs_dir
 
     def _backup_path(self, env_name: str) -> Path:
-        return self._ensure_backup_dir() / f"{env_name}.json"
+        return self._ensure_envs_dir() / f"{env_name}.json"
 
     def _platform_key(self) -> str:
         return platform.system().lower()
@@ -243,11 +243,11 @@ class Fridge:
         list of EnvBackup
             Sorted alphabetically by environment name.
         """
-        backup_dir = self.config.backup_dir
-        if not backup_dir.exists():
+        envs_dir = self.config.envs_dir
+        if not envs_dir.exists():
             return []
         backups: List[EnvBackup] = []
-        for json_file in sorted(backup_dir.glob("*.json")):
+        for json_file in sorted(envs_dir.glob("*.json")):
             try:
                 backups.append(EnvBackup.from_file(str(json_file)))
             except Exception as exc:
