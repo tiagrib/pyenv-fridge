@@ -246,12 +246,12 @@ pyenv_fridge/
 ├── backends/
 │   ├── __init__.py        # get_backend() factory + registry
 │   ├── base.py            # VirtualenvBackend ABC
-│   ├── pyenv_venv_win.py  # ✅ Windows – pyenv-venv-win (implemented via pyenv-venv CLI)
-│   └── pyenv_virtualenv.py# 🔲 Linux/macOS – pyenv-virtualenv (stub)
+│   ├── pyenv_venv_win.py  # Windows – pyenv-venv-win (implemented via pyenv-venv CLI)
+│   └── pyenv_virtualenv.py# Linux/macOS – pyenv-virtualenv (stub)
 └── package_managers/
     ├── __init__.py        # get_package_manager() factory + registry
     ├── base.py            # PackageManager ABC
-    └── pip.py             # ✅ pip (implemented)
+    └── pip.py             # pip (implemented)
 ```
 
 ### Adding a new virtualenv backend
