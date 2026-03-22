@@ -264,7 +264,6 @@ def build_parser() -> argparse.ArgumentParser:
     )
 
     subparsers = parser.add_subparsers(dest="command", metavar="<command>")
-    subparsers.required = True
 
     # ---- backup ----
     backup_parser = subparsers.add_parser(
@@ -399,6 +398,14 @@ def build_parser() -> argparse.ArgumentParser:
 def main(argv: Optional[List[str]] = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
+
+    if args.command is None:
+        print("~~~ fridge - keep your Python environments fresh ~~~")
+        print()
+        parser.print_usage()
+        print()
+        return cmd_list(args)
+
     return args.func(args)
 
 
