@@ -52,23 +52,43 @@ def cmd_backup(args: argparse.Namespace) -> int:
     """Handle the ``backup`` sub-command."""
     config = FridgeConfig.load()
     fridge = Fridge(config=config)
+    dry_run: bool = getattr(args, "dry_run", False)
 
     if args.env_name:
-        print(f"Backing up environment '{args.env_name}' …")
+        if dry_run:
+            print(f"Collecting environment '{args.env_name}' (dry run) ...")
+        else:
+            print(f"Backing up environment '{args.env_name}' ...")
         try:
-            backup = fridge.backup_env(args.env_name)
-            print(
-                f"✓ Backup saved: {fridge._backup_path(args.env_name)}\n"
-                f"  Python {backup.python_version}, "
-                f"{len(backup.packages)} packages"
-            )
+            if dry_run:
+                backup = fridge.collect_env(args.env_name)
+                print(
+                    f"> Would back up: {fridge._backup_path(args.env_name)}\n"
+                    f"  Python {backup.python_version}, "
+                    f"{len(backup.packages)} packages"
+                )
+            else:
+                backup = fridge.backup_env(args.env_name)
+                print(
+                    f"[ok] Backup saved: {fridge._backup_path(args.env_name)}\n"
+                    f"  Python {backup.python_version}, "
+                    f"{len(backup.packages)} packages"
+                )
         except Exception as exc:
-            print(f"✗ Error: {exc}", file=sys.stderr)
+            print(f"[error] Error: {exc}", file=sys.stderr)
             return 1
     else:
-        print("Backing up all environments …")
-        backups = fridge.backup_all()
-        print(f"\n✓ Done. {len(backups)} environment(s) backed up.")
+        if dry_run:
+            print("Collecting all environments (dry run) ...")
+        else:
+            print("Backing up all environments ...")
+        backups = fridge.backup_all(dry_run=dry_run)
+        if dry_run:
+            print(
+                f"\nDry run complete. {len(backups)} environment(s) would be backed up."
+            )
+        else:
+            print(f"\n[ok] Done. {len(backups)} environment(s) backed up.")
         print(f"  Backup directory: {config.backup_dir}")
 
     return 0
@@ -79,7 +99,7 @@ def cmd_restore(args: argparse.Namespace) -> int:
     config = FridgeConfig.load()
     fridge = Fridge(config=config)
 
-    print(f"Restoring environment '{args.env_name}' …")
+    print(f"Restoring environment '{args.env_name}' ...")
     try:
         fridge.restore_env(
             args.env_name,
@@ -87,10 +107,10 @@ def cmd_restore(args: argparse.Namespace) -> int:
             reinstall=args.reinstall,
         )
     except FileNotFoundError as exc:
-        print(f"✗ {exc}", file=sys.stderr)
+        print(f"[error] {exc}", file=sys.stderr)
         return 1
     except Exception as exc:
-        print(f"✗ Error during restore: {exc}", file=sys.stderr)
+        print(f"[error] Error during restore: {exc}", file=sys.stderr)
         return 1
 
     return 0
@@ -106,10 +126,10 @@ def cmd_diff(args: argparse.Namespace) -> int:
     try:
         diff = fridge.diff_env(args.env_name, current_python_executable=current_python)
     except FileNotFoundError as exc:
-        print(f"✗ {exc}", file=sys.stderr)
+        print(f"[error] {exc}", file=sys.stderr)
         return 1
     except Exception as exc:
-        print(f"✗ Error: {exc}", file=sys.stderr)
+        print(f"[error] Error: {exc}", file=sys.stderr)
         return 1
 
     print(f"Diff for '{args.env_name}'  (backup → current):")
@@ -156,7 +176,7 @@ def cmd_config(args: argparse.Namespace) -> int:
         valid_keys = {"backup_dir", "backend", "package_manager"}
         if key not in valid_keys:
             print(
-                f"✗ Unknown config key {key!r}. Valid keys: {', '.join(sorted(valid_keys))}",
+                f"[error] Unknown config key {key!r}. Valid keys: {', '.join(sorted(valid_keys))}",
                 file=sys.stderr,
             )
             return 1
@@ -167,33 +187,27 @@ def cmd_config(args: argparse.Namespace) -> int:
         elif key == "package_manager":
             config.package_manager = value
         config.save()
-        print(f"✓ Set {key} = {value}")
+        print(f"[ok] Set {key} = {value}")
         print(f"  Config saved to {config.config_path}")
         return 0
 
-    print(f"✗ Unknown config sub-command: {sub!r}", file=sys.stderr)
+    print(f"[error] Unknown config sub-command: {sub!r}", file=sys.stderr)
     return 1
 
 
 def cmd_setup(args: argparse.Namespace) -> int:
     """Handle the ``setup`` sub-command."""
     config = FridgeConfig.load()
-    print("Running pyenv-fridge setup …")
+    print("Running pyenv-fridge setup ...")
     print(f"  configured backend: {config.backend}")
     print(f"  configured package manager: {config.package_manager}")
 
     if config.backend == "pyenv-venv-win":
         print("  backend installer hint:")
-        print(
-            "    Install pyenv-win-venv: "
-            "https://github.com/pyenv-win/pyenv-win-venv"
-        )
+        print("    Install pyenv-win-venv: https://github.com/pyenv-win/pyenv-win-venv")
     elif config.backend == "pyenv-virtualenv":
         print("  backend installer hint:")
-        print(
-            "    Install pyenv-virtualenv: "
-            "https://github.com/pyenv/pyenv-virtualenv"
-        )
+        print("    Install pyenv-virtualenv: https://github.com/pyenv/pyenv-virtualenv")
     else:
         print("  backend installer hint:")
         print("    Custom backend configured; follow its own setup instructions.")
@@ -202,15 +216,15 @@ def cmd_setup(args: argparse.Namespace) -> int:
         print("  package manager check:")
         print("    pip is expected to be available with the selected Python envs.")
         if args.install_package_manager:
-            print("  installing/upgrading pip via ensurepip …")
+            print("  installing/upgrading pip via ensurepip ...")
             try:
                 subprocess.run(
                     [sys.executable, "-m", "ensurepip", "--upgrade"],
                     check=True,
                 )
-                print("  ✓ pip bootstrap complete.")
+                print("  [ok] pip bootstrap complete.")
             except Exception as exc:
-                print(f"  ✗ pip bootstrap failed: {exc}", file=sys.stderr)
+                print(f"  [error] pip bootstrap failed: {exc}", file=sys.stderr)
                 return 1
     else:
         print("  package manager check:")
@@ -225,7 +239,7 @@ def cmd_setup(args: argparse.Namespace) -> int:
             )
             return 1
 
-    print("✓ Setup guidance complete.")
+    print("[ok] Setup guidance complete.")
     return 0
 
 
@@ -266,6 +280,12 @@ def build_parser() -> argparse.ArgumentParser:
         nargs="?",
         metavar="ENV",
         help="Name of the environment to back up. Omit to back up all environments.",
+    )
+    backup_parser.add_argument(
+        "--dry",
+        action="store_true",
+        default=False,
+        help="Show what would be backed up without writing any files.",
     )
     backup_parser.set_defaults(func=cmd_backup)
 

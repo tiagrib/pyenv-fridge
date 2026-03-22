@@ -52,6 +52,20 @@ def _pyenv_root() -> Path:
     return Path.home() / ".pyenv" / "pyenv-win"
 
 
+def _pyenv_venv_root() -> Path:
+    """Resolve the pyenv-win-venv envs directory.
+
+    Tries (in order):
+
+    1. ``PYENV_VENV_HOME`` environment variable
+    2. ``%USERPROFILE%\\.pyenv-win-venv\\envs``
+    """
+    val = os.environ.get("PYENV_VENV_HOME")
+    if val:
+        return Path(val)
+    return Path.home() / ".pyenv-win-venv" / "envs"
+
+
 # A plain version string such as "3.11.5" or "3.10.0-win32"
 _VERSION_RE = re.compile(r"^\d+\.\d+\.\d+")
 
@@ -66,8 +80,13 @@ class PyenvVenvWinBackend(VirtualenvBackend):
         :func:`_pyenv_root`.
     """
 
-    def __init__(self, pyenv_root: Optional[Path] = None) -> None:
+    def __init__(
+        self,
+        pyenv_root: Optional[Path] = None,
+        venv_root: Optional[Path] = None,
+    ) -> None:
         self._pyenv_root = pyenv_root or _pyenv_root()
+        self._venv_root = venv_root or _pyenv_venv_root()
 
     @property
     def name(self) -> str:
@@ -81,6 +100,14 @@ class PyenvVenvWinBackend(VirtualenvBackend):
         return self._pyenv_root / "versions"
 
     def _env_root(self, env_name: str) -> Path:
+        """Return the root directory for a virtualenv.
+
+        Checks the ``pyenv-win-venv`` envs directory first, then falls back to
+        the pyenv-win ``versions`` directory.
+        """
+        venv_path = self._venv_root / env_name
+        if venv_path.exists():
+            return venv_path
         return self._versions_dir() / env_name
 
     def _is_valid_env_name(self, line: str) -> bool:
@@ -90,6 +117,7 @@ class PyenvVenvWinBackend(VirtualenvBackend):
             bool(line)
             and not lowered.startswith("pyenv")
             and not lowered.startswith("usage:")
+            and not lowered.endswith(":")
             and not line.startswith("-")
             and not _VERSION_RE.match(line)
         )
@@ -110,6 +138,7 @@ class PyenvVenvWinBackend(VirtualenvBackend):
                 capture_output=True,
                 text=True,
                 check=True,
+                shell=True,
             )
             envs = []
             for line in result.stdout.splitlines():
@@ -121,14 +150,24 @@ class PyenvVenvWinBackend(VirtualenvBackend):
             return self._list_envs_from_filesystem()
 
     def _list_envs_from_filesystem(self) -> List[str]:
-        """Fallback: scan the versions directory."""
+        """Fallback: scan the pyenv-win-venv envs directory and pyenv versions."""
+        envs: List[str] = []
+        # Primary: pyenv-win-venv envs directory
+        if self._venv_root.exists():
+            for entry in self._venv_root.iterdir():
+                if entry.is_dir():
+                    envs.append(entry.name)
+        # Secondary: pyenv-win versions directory (non-version-string dirs)
         versions_dir = self._versions_dir()
-        if not versions_dir.exists():
-            return []
-        envs = []
-        for entry in versions_dir.iterdir():
-            if entry.is_dir() and not _VERSION_RE.match(entry.name):
-                envs.append(entry.name)
+        if versions_dir.exists():
+            seen = set(envs)
+            for entry in versions_dir.iterdir():
+                if (
+                    entry.is_dir()
+                    and not _VERSION_RE.match(entry.name)
+                    and entry.name not in seen
+                ):
+                    envs.append(entry.name)
         return sorted(envs)
 
     def get_python_executable(self, env_name: str) -> str:
@@ -167,4 +206,5 @@ class PyenvVenvWinBackend(VirtualenvBackend):
         subprocess.run(
             ["pyenv-venv", "install", python_version, env_name],
             check=True,
+            shell=True,
         )

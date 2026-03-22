@@ -83,6 +83,32 @@ class Fridge:
     # Public API
     # ------------------------------------------------------------------
 
+    def collect_env(self, env_name: str) -> EnvBackup:
+        """Collect backup data for a single environment without writing to disk.
+
+        Parameters
+        ----------
+        env_name:
+            Name of the virtual environment to collect.
+
+        Returns
+        -------
+        EnvBackup
+            The snapshot (not yet saved).
+        """
+        python_exe = self.backend.get_python_executable(env_name)
+        python_version = self.backend.get_python_version(env_name)
+        packages = self.package_manager.freeze(python_exe)
+
+        return EnvBackup(
+            name=env_name,
+            python_version=python_version,
+            packages=packages,
+            platform=self._platform_key(),
+            backend=self.backend.name,
+            package_manager=self.package_manager.name,
+        )
+
     def backup_env(self, env_name: str) -> EnvBackup:
         """Backup a single virtual environment.
 
@@ -100,38 +126,40 @@ class Fridge:
         EnvBackup
             The snapshot that was written.
         """
-        python_exe = self.backend.get_python_executable(env_name)
-        python_version = self.backend.get_python_version(env_name)
-        packages = self.package_manager.freeze(python_exe)
-
-        backup = EnvBackup(
-            name=env_name,
-            python_version=python_version,
-            packages=packages,
-            platform=self._platform_key(),
-            backend=self.backend.name,
-            package_manager=self.package_manager.name,
-        )
+        backup = self.collect_env(env_name)
         backup.save(str(self._backup_path(env_name)))
         return backup
 
-    def backup_all(self) -> List[EnvBackup]:
+    def backup_all(self, *, dry_run: bool = False) -> List[EnvBackup]:
         """Backup every virtual environment managed by the current backend.
+
+        Parameters
+        ----------
+        dry_run:
+            If *True*, collect and display what would be backed up without
+            writing any files.
 
         Returns
         -------
         list of EnvBackup
-            One snapshot per environment that was successfully backed up.
+            One snapshot per environment that was successfully backed up
+            (or collected, in dry mode).
         """
         env_names = self.backend.list_envs()
         backups: List[EnvBackup] = []
         for env_name in env_names:
             try:
-                backup = self.backup_env(env_name)
+                if dry_run:
+                    backup = self.collect_env(env_name)
+                else:
+                    backup = self.backup_env(env_name)
                 backups.append(backup)
-                print(f"  ✓ Backed up '{env_name}' ({len(backup.packages)} packages)")
+                prefix = "  > " if dry_run else "  [ok] "
+                print(
+                    f"{prefix}'{env_name}' - Python {backup.python_version}, {len(backup.packages)} packages"
+                )
             except Exception as exc:
-                print(f"  ✗ Failed to back up '{env_name}': {exc}")
+                print(f"  [error] Failed to collect '{env_name}': {exc}")
         return backups
 
     def restore_env(
@@ -164,8 +192,7 @@ class Fridge:
         backup_path = self._backup_path(env_name)
         if not backup_path.exists():
             raise FileNotFoundError(
-                f"No backup found for environment {env_name!r} "
-                f"(expected {backup_path})"
+                f"No backup found for environment {env_name!r} (expected {backup_path})"
             )
 
         backup = EnvBackup.from_file(str(backup_path))
@@ -176,7 +203,7 @@ class Fridge:
             if create_if_missing:
                 print(
                     f"  Creating environment '{env_name}' "
-                    f"(Python {backup.python_version}) …"
+                    f"(Python {backup.python_version}) ..."
                 )
                 self.backend.create_env(env_name, backup.python_version)
             else:
@@ -186,12 +213,9 @@ class Fridge:
                 )
 
         if not env_exists or reinstall:
-            print(
-                f"  Installing {len(backup.packages)} packages "
-                f"into '{env_name}' …"
-            )
+            print(f"  Installing {len(backup.packages)} packages into '{env_name}' ...")
             self.package_manager.install_packages(python_exe, backup.packages)
-        print(f"  ✓ Environment '{env_name}' restored.")
+        print(f"  [ok] Environment '{env_name}' restored.")
 
     def diff_env(
         self,
@@ -222,8 +246,7 @@ class Fridge:
         backup_path = self._backup_path(env_name)
         if not backup_path.exists():
             raise FileNotFoundError(
-                f"No backup found for environment {env_name!r} "
-                f"(expected {backup_path})"
+                f"No backup found for environment {env_name!r} (expected {backup_path})"
             )
 
         backup = EnvBackup.from_file(str(backup_path))
