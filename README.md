@@ -54,6 +54,8 @@ cloud-synced folder) so you can carry your environments across machines.
 pip install pyenv-fridge          # from PyPI (once published)
 # or, directly from source:
 pip install git+https://github.com/tiagrib/pyenv-fridge.git
+# or, from a local clone (run from repository root):
+pip install .
 ```
 
 The only runtime dependency is the Python standard library (≥ 3.9).
