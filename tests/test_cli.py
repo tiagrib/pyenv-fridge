@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+import sys
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -71,6 +72,18 @@ class TestBuildParser:
         parser = build_parser()
         args = parser.parse_args(["list"])
         assert args.command == "list"
+
+    def test_setup(self):
+        parser = build_parser()
+        args = parser.parse_args(["setup"])
+        assert args.command == "setup"
+        assert args.install_package_manager is False
+
+    def test_setup_with_install_package_manager_flag(self):
+        parser = build_parser()
+        args = parser.parse_args(["setup", "--install-package-manager"])
+        assert args.command == "setup"
+        assert args.install_package_manager is True
 
     def test_config_show(self):
         parser = build_parser()
@@ -236,3 +249,44 @@ class TestCmdConfig:
         assert code == 1
         captured = capsys.readouterr()
         assert "Unknown config key" in captured.err
+
+
+class TestCmdSetup:
+    def test_setup_default_windows_backend_hint(self, tmp_path, capsys):
+        config = _make_config(tmp_path)
+        with patch("pyenv_fridge.cli.FridgeConfig.load", return_value=config):
+            code = main(["setup"])
+        assert code == 0
+        captured = capsys.readouterr()
+        assert "configured backend: pyenv-venv-win" in captured.out
+        assert "pyenv-win-venv" in captured.out
+
+    def test_setup_linux_backend_hint(self, tmp_path, capsys):
+        config = _make_config(tmp_path)
+        config.backend = "pyenv-virtualenv"
+        with patch("pyenv_fridge.cli.FridgeConfig.load", return_value=config):
+            code = main(["setup"])
+        assert code == 0
+        captured = capsys.readouterr()
+        assert "pyenv-virtualenv" in captured.out
+
+    def test_setup_install_package_manager_for_pip(self, tmp_path, capsys):
+        config = _make_config(tmp_path)
+        with patch("pyenv_fridge.cli.FridgeConfig.load", return_value=config):
+            with patch("pyenv_fridge.cli.subprocess.run") as mock_run:
+                code = main(["setup", "--install-package-manager"])
+        assert code == 0
+        mock_run.assert_called_once()
+        args = mock_run.call_args[0][0]
+        assert args[:3] == [sys.executable, "-m", "ensurepip"]
+        captured = capsys.readouterr()
+        assert "pip bootstrap complete" in captured.out
+
+    def test_setup_install_package_manager_custom_pm_fails(self, tmp_path, capsys):
+        config = _make_config(tmp_path)
+        config.package_manager = "conda"
+        with patch("pyenv_fridge.cli.FridgeConfig.load", return_value=config):
+            code = main(["setup", "--install-package-manager"])
+        assert code == 1
+        captured = capsys.readouterr()
+        assert "currently supported only for 'pip'" in captured.err

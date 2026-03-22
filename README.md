@@ -62,7 +62,7 @@ The only runtime dependency is the Python standard library (≥ 3.9).
 
 ## Quick start
 
-### Windows (pyenv-venv-win)
+### Windows (pyenv-win-venv / `pyenv-venv`)
 
 ```powershell
 # Back up every virtual environment
@@ -85,7 +85,8 @@ fridge restore my-data-science-env
 
 The commands are identical; `fridge` auto-detects the platform and uses the
 appropriate backend (`pyenv-virtualenv` on Linux/macOS,
-`pyenv-venv-win` on Windows).
+`pyenv-venv-win` on Windows, implemented via the `pyenv-venv` CLI from
+`pyenv-win-venv`).
 
 ---
 
@@ -140,6 +141,15 @@ Changed (1):
 
 Print all stored backup snapshots with Python version, package count, and
 timestamp.
+
+### `fridge setup`
+
+Show setup guidance for the currently configured backend/package manager.
+For Windows + `pyenv-venv-win`, this points to the `pyenv-win-venv` installer
+and confirms the expected `pyenv-venv` command.
+
+Use `--install-package-manager` to bootstrap the configured package manager
+when supported (currently `pip` via `python -m ensurepip --upgrade`).
 
 ### `fridge config show`
 
@@ -218,7 +228,7 @@ pyenv_fridge/
 ├── backends/
 │   ├── __init__.py        # get_backend() factory + registry
 │   ├── base.py            # VirtualenvBackend ABC
-│   ├── pyenv_venv_win.py  # ✅ Windows – pyenv-venv-win (implemented)
+│   ├── pyenv_venv_win.py  # ✅ Windows – pyenv-venv-win (implemented via pyenv-venv CLI)
 │   └── pyenv_virtualenv.py# 🔲 Linux/macOS – pyenv-virtualenv (stub)
 └── package_managers/
     ├── __init__.py        # get_package_manager() factory + registry

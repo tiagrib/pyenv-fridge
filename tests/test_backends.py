@@ -109,9 +109,9 @@ class TestPyenvVenvWinBackend:
         envs = backend.list_envs()
         assert "myenv" in envs
 
-    def test_list_envs_parses_pyenv_output(self, tmp_path, mocker):
+    def test_list_envs_parses_pyenv_venv_output(self, tmp_path, mocker):
         mock_result = mocker.MagicMock()
-        mock_result.stdout = "3.11.5\nmyenv\nanotherenv\n3.10.0\n"
+        mock_result.stdout = "myenv\nanotherenv\n"
         mocker.patch(
             "pyenv_fridge.backends.pyenv_venv_win.subprocess.run",
             return_value=mock_result,
@@ -120,8 +120,18 @@ class TestPyenvVenvWinBackend:
         envs = backend.list_envs()
         assert "myenv" in envs
         assert "anotherenv" in envs
-        assert "3.11.5" not in envs
-        assert "3.10.0" not in envs
+    
+    def test_list_envs_ignores_cli_noise(self, tmp_path, mocker):
+        mock_result = mocker.MagicMock()
+        mock_result.stdout = "pyenv-win-venv v0.6\nusage: pyenv-venv ...\n-myflag\nmyenv\n"
+        mocker.patch(
+            "pyenv_fridge.backends.pyenv_venv_win.subprocess.run",
+            return_value=mock_result,
+        )
+        backend = self._make_backend(tmp_path)
+        envs = backend.list_envs()
+        assert envs == ["myenv"]
+        assert "pyenv-win-venv v0.6" not in envs
 
     def test_get_python_version_parses_output(self, tmp_path, mocker):
         mock_result = mocker.MagicMock()
@@ -144,7 +154,7 @@ class TestPyenvVenvWinBackend:
         version = backend.get_python_version("myenv")
         assert version == "unknown"
 
-    def test_create_env_calls_pyenv(self, tmp_path, mocker):
+    def test_create_env_calls_pyenv_venv(self, tmp_path, mocker):
         mock_run = mocker.patch(
             "pyenv_fridge.backends.pyenv_venv_win.subprocess.run"
         )
@@ -152,8 +162,8 @@ class TestPyenvVenvWinBackend:
         backend.create_env("newenv", "3.11.5")
         mock_run.assert_called_once()
         call_args = mock_run.call_args[0][0]
-        assert "pyenv" in call_args
-        assert "virtualenv" in call_args
+        assert "pyenv-venv" in call_args
+        assert "install" in call_args
         assert "3.11.5" in call_args
         assert "newenv" in call_args
 

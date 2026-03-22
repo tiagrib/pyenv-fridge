@@ -1,8 +1,7 @@
-"""Windows backend using ``pyenv-venv-win``.
+"""Windows backend using ``pyenv-win-venv``.
 
-``pyenv-venv-win`` (https://github.com/pyenv-win/pyenv-venv) is a plugin for
-`pyenv-win <https://github.com/pyenv-win/pyenv-win>`_ that adds the
-``pyenv virtualenv`` sub-command on Windows.
+`pyenv-win-venv <https://github.com/pyenv-win/pyenv-win-venv>`_ provides the
+``pyenv-venv`` CLI on Windows (``pyenv-win-venv`` is an alias).
 
 Virtual environments are stored at::
 
@@ -14,9 +13,8 @@ The Python interpreter lives at::
 
 Listing environments
 ~~~~~~~~~~~~~~~~~~~~
-This backend invokes ``pyenv virtualenvs --bare`` and filters out lines that
-look like plain Python version strings (e.g. ``3.11.5``) so that only
-virtualenv names are returned.
+This backend invokes ``pyenv-venv list envs`` and parses one environment name
+per line.
 
 Extension notes
 ~~~~~~~~~~~~~~~
@@ -59,7 +57,7 @@ _VERSION_RE = re.compile(r"^\d+\.\d+\.\d+")
 
 
 class PyenvVenvWinBackend(VirtualenvBackend):
-    """Virtualenv backend for Windows using ``pyenv-venv-win``.
+    """Virtualenv backend for Windows using ``pyenv-win-venv``.
 
     Parameters
     ----------
@@ -85,19 +83,30 @@ class PyenvVenvWinBackend(VirtualenvBackend):
     def _env_root(self, env_name: str) -> Path:
         return self._versions_dir() / env_name
 
+    def _is_valid_env_name(self, line: str) -> bool:
+        """Return whether a ``pyenv-venv list envs`` output line is an env name."""
+        lowered = line.lower()
+        return (
+            bool(line)
+            and not lowered.startswith("pyenv")
+            and not lowered.startswith("usage:")
+            and not line.startswith("-")
+            and not _VERSION_RE.match(line)
+        )
+
     # ------------------------------------------------------------------
     # VirtualenvBackend interface
     # ------------------------------------------------------------------
 
     def list_envs(self) -> List[str]:
-        """List virtualenvs by invoking ``pyenv virtualenvs --bare``.
+        """List virtualenvs by invoking ``pyenv-venv list envs``.
 
         Falls back to scanning the ``versions`` directory for directories that
         do not look like plain Python version strings (i.e. they are venvs).
         """
         try:
             result = subprocess.run(
-                ["pyenv", "virtualenvs", "--bare"],
+                ["pyenv-venv", "list", "envs"],
                 capture_output=True,
                 text=True,
                 check=True,
@@ -105,7 +114,7 @@ class PyenvVenvWinBackend(VirtualenvBackend):
             envs = []
             for line in result.stdout.splitlines():
                 line = line.strip()
-                if line and not _VERSION_RE.match(line):
+                if self._is_valid_env_name(line):
                     envs.append(line)
             return envs
         except (FileNotFoundError, subprocess.CalledProcessError):
@@ -154,8 +163,8 @@ class PyenvVenvWinBackend(VirtualenvBackend):
             return "unknown"
 
     def create_env(self, env_name: str, python_version: str) -> None:
-        """Create a new virtualenv via ``pyenv virtualenv <version> <name>``."""
+        """Create a new virtualenv via ``pyenv-venv install <version> <name>``."""
         subprocess.run(
-            ["pyenv", "virtualenv", python_version, env_name],
+            ["pyenv-venv", "install", python_version, env_name],
             check=True,
         )
