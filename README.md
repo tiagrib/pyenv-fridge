@@ -24,6 +24,7 @@ cloud-synced folder) so you can carry your environments across machines.
   - [Adding a new virtualenv backend](#adding-a-new-virtualenv-backend)
   - [Adding a new package manager](#adding-a-new-package-manager)
   - [Linux / macOS support](#linux--macos-support)
+- [How does this compare to other tools?](#how-does-this-compare-to-other-tools)
 - [Development](#development)
 
 ---
@@ -332,6 +333,27 @@ path (`bin/python` vs `Scripts/python.exe`).
 - [ ] Verify `get_python_executable` path on all common distros.
 - [ ] Add CI matrix entries for Linux runners.
 - [ ] Document distro-specific pyenv setup steps in this README.
+
+---
+
+## How does this compare to other tools?
+
+`pyenv-fridge` fills a gap that existing tools leave open. Here is how it
+relates to the most common alternatives:
+
+| Tool | What it does | Key differences from pyenv-fridge |
+|---|---|---|
+| **pip-tools / Poetry / Pipenv / uv** | Per-project dependency locking | Pins deps for a *project*, not backup/restore of named *environments*. No multi-env batch, no diff, no pyenv integration. |
+| **conda env export** | Exports a conda env to YAML/JSON | Conda-only, single env at a time, no diff, no configurable backup directory. |
+| **pyenv-pip-migrate** | Migrates pip packages between Python versions | Same-machine only, no persistent snapshots, no diff, no batch. |
+| **pyenv-virtualenv-migrate** | Bulk-migrates envs across Python versions | No persistent snapshots, no restore from file, no diff. |
+| **venv-pack / conda-pack** | Binary archive of an entire env directory | Archives files, not package lists -- not portable across OS/arch. |
+| **virtualenv-clone** | Filesystem-level copy of a single venv | Local copy only, no JSON, no cross-machine restore. |
+
+**What makes pyenv-fridge unique:** structured JSON snapshots + multi-env
+batch backup + diff (backup vs. live) + restore with env creation + pyenv
+backend integration + syncable backup directory. No existing tool combines all
+of these.
 
 ---
 
