@@ -175,7 +175,7 @@ class Fridge:
         ----------
         env_name:
             Name of the environment to restore.  A backup file
-            ``<backup_dir>/<env_name>.json`` must exist.
+            ``<location>/<env_name>.json`` must exist.
         create_if_missing:
             If *True* (default) the virtualenv is created via the backend
             before installing packages.  If *False* the env must already exist.

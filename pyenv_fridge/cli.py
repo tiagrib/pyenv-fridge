@@ -26,7 +26,7 @@ List all stored backups::
 Show / modify the current configuration::
 
     fridge config show
-    fridge config set backup_dir /path/to/cloud/drive/pyenv-fridge
+    fridge config set location /path/to/cloud/drive/pyenv-fridge
     fridge config set backend pyenv-virtualenv
 """
 
@@ -89,7 +89,7 @@ def cmd_backup(args: argparse.Namespace) -> int:
             )
         else:
             print(f"\n[ok] Done. {len(backups)} environment(s) backed up.")
-        print(f"  Backup directory: {config.backup_dir}")
+        print(f"  Backup directory: {config.location}")
 
     return 0
 
@@ -144,10 +144,10 @@ def cmd_list(args: argparse.Namespace) -> int:
 
     backups = fridge.list_backups()
     if not backups:
-        print(f"No backups found in {config.backup_dir}")
+        print(f"No backups found in {config.location}")
         return 0
 
-    print(f"Backups in {config.backup_dir}:\n")
+    print(f"Backups in {config.location}:\n")
     for backup in backups:
         print(
             f"  {backup.name:<30}  Python {backup.python_version:<10}  "
@@ -173,15 +173,15 @@ def cmd_config(args: argparse.Namespace) -> int:
     if sub == "set":
         key: str = args.key
         value: str = args.value
-        valid_keys = {"backup_dir", "backend", "package_manager"}
+        valid_keys = {"location", "backend", "package_manager"}
         if key not in valid_keys:
             print(
                 f"[error] Unknown config key {key!r}. Valid keys: {', '.join(sorted(valid_keys))}",
                 file=sys.stderr,
             )
             return 1
-        if key == "backup_dir":
-            config.backup_dir = Path(value)
+        if key == "location":
+            config.location = Path(value)
         elif key == "backend":
             config.backend = value
         elif key == "package_manager":
@@ -378,7 +378,7 @@ def build_parser() -> argparse.ArgumentParser:
     set_parser.add_argument(
         "key",
         metavar="KEY",
-        help="Configuration key (backup_dir | backend | package_manager).",
+        help="Configuration key (location | backend | package_manager).",
     )
     set_parser.add_argument(
         "value",

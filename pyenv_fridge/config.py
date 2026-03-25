@@ -6,7 +6,7 @@ alongside the ``envs/`` sub-directory that holds environment snapshots:
 * **Windows**: ``%USERPROFILE%\\Documents\\pyenv-fridge\\config.json``
 * **Linux / macOS**: ``~/.local/share/pyenv-fridge/config.json``
 
-The backup directory can be overridden via ``fridge config set backup_dir …``.
+The backup directory can be overridden via ``fridge config set location …``.
 When the backup directory is changed, a copy of the configuration is also kept
 at the default location so that ``fridge`` can discover the redirect on the
 next invocation.
@@ -22,7 +22,7 @@ from pathlib import Path
 from typing import Any, Dict, Optional
 
 
-def _default_backup_dir() -> Path:
+def _default_location() -> Path:
     """Return the OS-appropriate default backup directory."""
     system = platform.system()
     if system == "Windows":
@@ -51,11 +51,11 @@ def _default_package_manager() -> str:
 class FridgeConfig:
     """Persistent configuration for pyenv-fridge.
 
-    The configuration file always lives at ``<backup_dir>/config.json``.
-    Environment snapshots are stored under ``<backup_dir>/envs/``.
+    The configuration file always lives at ``<location>/config.json``.
+    Environment snapshots are stored under ``<location>/envs/``.
 
     Attributes:
-        backup_dir: Root directory for pyenv-fridge data.
+        location: Root directory for pyenv-fridge data.
         backend: Virtualenv backend name (e.g. ``"pyenv-venv-win"``).
         package_manager: Package manager name (e.g. ``"pip"``).
     """
@@ -65,23 +65,23 @@ class FridgeConfig:
 
     def __init__(
         self,
-        backup_dir: Optional[Path] = None,
+        location: Optional[Path] = None,
         backend: Optional[str] = None,
         package_manager: Optional[str] = None,
     ) -> None:
-        self.backup_dir: Path = backup_dir or _default_backup_dir()
+        self.location: Path = location or _default_location()
         self.backend: str = backend or _default_backend()
         self.package_manager: str = package_manager or _default_package_manager()
 
     @property
     def config_path(self) -> Path:
-        """Path to the JSON config file (always ``backup_dir/config.json``)."""
-        return self.backup_dir / self.CONFIG_FILENAME
+        """Path to the JSON config file (always ``location/config.json``)."""
+        return self.location / self.CONFIG_FILENAME
 
     @property
     def envs_dir(self) -> Path:
         """Directory where environment snapshot JSON files are stored."""
-        return self.backup_dir / self.ENVS_DIRNAME
+        return self.location / self.ENVS_DIRNAME
 
     # ------------------------------------------------------------------
     # Persistence
@@ -91,7 +91,7 @@ class FridgeConfig:
         """Serialise the current settings to *path*."""
         path.parent.mkdir(parents=True, exist_ok=True)
         data: Dict[str, Any] = {
-            "backup_dir": str(self.backup_dir),
+            "location": str(self.location),
             "backend": self.backend,
             "package_manager": self.package_manager,
         }
@@ -99,31 +99,31 @@ class FridgeConfig:
             json.dump(data, fh, indent=2)
 
     def save(self) -> None:
-        """Write the current settings to ``backup_dir/config.json``.
+        """Write the current settings to ``location/config.json``.
 
-        If *backup_dir* differs from the platform default, a copy of the
+        If *location* differs from the platform default, a copy of the
         configuration is also written to the default location so that
         ``fridge`` can discover the redirect on the next invocation.
         """
         self._write_config(self.config_path)
-        default_bd = _default_backup_dir()
-        if self.backup_dir.resolve() != default_bd.resolve():
+        default_bd = _default_location()
+        if self.location.resolve() != default_bd.resolve():
             self._write_config(default_bd / self.CONFIG_FILENAME)
 
     @classmethod
-    def load(cls, backup_dir: Optional[Path] = None) -> "FridgeConfig":
-        """Load configuration from ``backup_dir/config.json``.
+    def load(cls, location: Optional[Path] = None) -> "FridgeConfig":
+        """Load configuration from ``location/config.json``.
 
-        When *backup_dir* is ``None`` the default location is tried first.
-        If that file redirects to a different *backup_dir*, the configuration
+        When *location* is ``None`` the default location is tried first.
+        If that file redirects to a different *location*, the configuration
         is re-loaded from there.
 
         If no file exists a default configuration is returned (nothing is
         written to disk until :meth:`save` is called).
         """
-        bd = backup_dir or _default_backup_dir()
+        bd = location or _default_location()
         path = bd / cls.CONFIG_FILENAME
-        cfg = cls(backup_dir=bd)
+        cfg = cls(location=bd)
         if path.exists():
             with open(path, "r", encoding="utf-8") as fh:
                 data: Dict[str, Any] = json.load(fh)
@@ -131,17 +131,17 @@ class FridgeConfig:
                 cfg.backend = data["backend"]
             if "package_manager" in data:
                 cfg.package_manager = data["package_manager"]
-            if "backup_dir" in data:
-                stored_bd = Path(data["backup_dir"])
+            if "location" in data:
+                stored_bd = Path(data["location"])
                 if stored_bd.resolve() != bd.resolve():
-                    # Redirect: the real config lives in a different backup_dir.
-                    return cls.load(backup_dir=stored_bd)
-                cfg.backup_dir = stored_bd
+                    # Redirect: the real config lives in a different location.
+                    return cls.load(location=stored_bd)
+                cfg.location = stored_bd
         return cfg
 
     def to_dict(self) -> Dict[str, Any]:
         return {
-            "backup_dir": str(self.backup_dir),
+            "location": str(self.location),
             "backend": self.backend,
             "package_manager": self.package_manager,
             "config_path": str(self.config_path),
@@ -149,7 +149,7 @@ class FridgeConfig:
 
     def __repr__(self) -> str:
         return (
-            f"FridgeConfig(backup_dir={str(self.backup_dir)!r}, "
+            f"FridgeConfig(location={str(self.location)!r}, "
             f"backend={self.backend!r}, "
             f"package_manager={self.package_manager!r})"
         )

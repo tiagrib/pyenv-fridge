@@ -19,7 +19,7 @@ from pyenv_fridge.models import EnvBackup, EnvDiff, PackageInfo
 
 def _make_config(tmp_path: Path) -> FridgeConfig:
     return FridgeConfig(
-        backup_dir=tmp_path / "backups",
+        location=tmp_path / "backups",
         backend="pyenv-venv-win",
         package_manager="pip",
     )

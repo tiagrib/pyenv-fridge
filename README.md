@@ -69,7 +69,7 @@ The only runtime dependency is the Python standard library (≥ 3.9).
 
 ```powershell
 # (Optional) Point backups at a cloud-synced folder
-fridge config set backup_dir "C:\Users\you\OneDrive\pyenv-fridge"
+fridge config set location "C:\Users\you\OneDrive\pyenv-fridge"
 
 # Show the active configuration
 fridge config show
@@ -113,7 +113,7 @@ Capture the state of a virtual environment.
 |---|---|
 | `ENV` (optional) | Name of the environment to back up. Omit to back up **all** environments. |
 
-Backup files are written to `<backup_dir>/envs/<ENV>.json`.
+Backup files are written to `<location>/envs/<ENV>.json`.
 
 ### `fridge restore ENV [--no-create] [--reinstall]`
 
@@ -170,7 +170,7 @@ Update a configuration value and persist it.
 
 | Key | Description |
 |---|---|
-| `backup_dir` | Directory where backup JSON files are stored. |
+| `location` | Directory where backup JSON files are stored. |
 | `backend` | Virtualenv backend name (`pyenv-venv-win` or `pyenv-virtualenv`). |
 | `package_manager` | Package manager name (`pip`). |
 
@@ -187,7 +187,7 @@ Everything lives under a single **backup directory**. The configuration file
 | **Linux / macOS** | `$XDG_DATA_HOME/pyenv-fridge` (or `~/.local/share/pyenv-fridge`) |
 
 ```
-pyenv-fridge/          # backup_dir
+pyenv-fridge/          # location
 ├── config.json        # fridge configuration
 └── envs/
     ├── my-env.json    # environment snapshots
@@ -197,9 +197,9 @@ pyenv-fridge/          # backup_dir
 ### Point backups at a cloud drive
 
 ```bash
-fridge config set backup_dir "C:\Users\you\OneDrive\pyenv-fridge"
+fridge config set location "C:\Users\you\OneDrive\pyenv-fridge"
 # or on Linux:
-fridge config set backup_dir "$HOME/Dropbox/pyenv-fridge"
+fridge config set location "$HOME/Dropbox/pyenv-fridge"
 ```
 
 ---

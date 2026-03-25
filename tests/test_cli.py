@@ -20,7 +20,7 @@ from pyenv_fridge.models import EnvBackup, PackageInfo
 
 def _make_config(tmp_path: Path) -> FridgeConfig:
     return FridgeConfig(
-        backup_dir=tmp_path / "backups",
+        location=tmp_path / "backups",
         backend="pyenv-venv-win",
         package_manager="pip",
     )
@@ -92,9 +92,9 @@ class TestBuildParser:
 
     def test_config_set(self):
         parser = build_parser()
-        args = parser.parse_args(["config", "set", "backup_dir", "/some/path"])
+        args = parser.parse_args(["config", "set", "location", "/some/path"])
         assert args.config_cmd == "set"
-        assert args.key == "backup_dir"
+        assert args.key == "location"
         assert args.value == "/some/path"
 
     def test_version_flag(self, capsys):
@@ -231,16 +231,16 @@ class TestCmdConfig:
             code = main(["config", "show"])
         assert code == 0
         captured = capsys.readouterr()
-        assert "backup_dir" in captured.out
+        assert "location" in captured.out
         assert "backend" in captured.out
 
-    def test_config_set_backup_dir(self, tmp_path, capsys):
+    def test_config_set_location(self, tmp_path, capsys):
         config = _make_config(tmp_path)
         with patch("pyenv_fridge.cli.FridgeConfig.load", return_value=config), \
-             patch("pyenv_fridge.config._default_backup_dir", return_value=tmp_path / "backups"):
-            code = main(["config", "set", "backup_dir", str(tmp_path / "newbackups")])
+             patch("pyenv_fridge.config._default_location", return_value=tmp_path / "backups"):
+            code = main(["config", "set", "location", str(tmp_path / "newbackups")])
         assert code == 0
-        assert config.backup_dir == tmp_path / "newbackups"
+        assert config.location == tmp_path / "newbackups"
 
     def test_config_set_invalid_key(self, tmp_path, capsys):
         config = _make_config(tmp_path)
