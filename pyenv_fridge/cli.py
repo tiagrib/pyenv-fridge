@@ -27,7 +27,7 @@ Show / modify the current configuration::
 
     fridge config show
     fridge config set location /path/to/cloud/drive/pyenv-fridge
-    fridge config set backend pyenv-virtualenv
+    fridge config set backend uv
 """
 
 from __future__ import annotations
@@ -89,7 +89,7 @@ def cmd_put(args: argparse.Namespace) -> int:
                 f"\nDry run complete. {len(backups)} environment(s) would be saved."
             )
         else:
-            print(f"\n[ok] Done. {len(backups)} environment(s) backed up.")
+            print(f"\n[ok] Done. {len(backups)} environment(s) saved.")
         print(f"  Backup directory: {config.location}")
 
     return 0
