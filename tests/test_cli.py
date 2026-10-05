@@ -32,29 +32,39 @@ def _make_config(tmp_path: Path) -> FridgeConfig:
 
 
 class TestBuildParser:
-    def test_backup_no_env(self):
+    def test_put_no_env(self):
         parser = build_parser()
-        args = parser.parse_args(["backup"])
-        assert args.command == "backup"
+        args = parser.parse_args(["put"])
+        assert args.command == "put"
         assert args.env_name is None
 
-    def test_backup_with_env(self):
+    def test_put_with_env(self):
+        parser = build_parser()
+        args = parser.parse_args(["put", "myenv"])
+        assert args.env_name == "myenv"
+
+    def test_backup_alias_works(self):
         parser = build_parser()
         args = parser.parse_args(["backup", "myenv"])
         assert args.env_name == "myenv"
 
-    def test_restore_required_env(self):
+    def test_get_required_env(self):
         parser = build_parser()
-        args = parser.parse_args(["restore", "myenv"])
+        args = parser.parse_args(["get", "myenv"])
         assert args.env_name == "myenv"
         assert args.no_create is False
         assert args.reinstall is False
 
-    def test_restore_flags(self):
+    def test_get_flags(self):
         parser = build_parser()
-        args = parser.parse_args(["restore", "myenv", "--no-create", "--reinstall"])
+        args = parser.parse_args(["get", "myenv", "--no-create", "--reinstall"])
         assert args.no_create is True
         assert args.reinstall is True
+
+    def test_restore_alias_works(self):
+        parser = build_parser()
+        args = parser.parse_args(["restore", "myenv"])
+        assert args.env_name == "myenv"
 
     def test_diff_required_env(self):
         parser = build_parser()
@@ -76,13 +86,18 @@ class TestBuildParser:
         parser = build_parser()
         args = parser.parse_args(["setup"])
         assert args.command == "setup"
-        assert args.install_package_manager is False
+        assert args.install is False
 
-    def test_setup_with_install_package_manager_flag(self):
+    def test_setup_with_install_flag(self):
+        parser = build_parser()
+        args = parser.parse_args(["setup", "--install"])
+        assert args.command == "setup"
+        assert args.install is True
+
+    def test_setup_old_install_package_manager_flag(self):
         parser = build_parser()
         args = parser.parse_args(["setup", "--install-package-manager"])
-        assert args.command == "setup"
-        assert args.install_package_manager is True
+        assert args.install is True
 
     def test_config_show(self):
         parser = build_parser()
@@ -143,12 +158,12 @@ class TestCmdList:
 
 
 # ---------------------------------------------------------------------------
-# cmd_backup
+# cmd_put (formerly cmd_backup)
 # ---------------------------------------------------------------------------
 
 
-class TestCmdBackup:
-    def test_backup_all(self, tmp_path, capsys):
+class TestCmdPut:
+    def test_put_all(self, tmp_path, capsys):
         config = _make_config(tmp_path)
         backups = [
             EnvBackup(name="env1", python_version="3.11.5", packages=[]),
@@ -159,12 +174,12 @@ class TestCmdBackup:
                 instance = MockFridge.return_value
                 instance.backup_all.return_value = backups
                 instance._backup_path = MagicMock()
-                code = main(["backup"])
+                code = main(["put"])
         assert code == 0
         captured = capsys.readouterr()
         assert "2 environment" in captured.out
 
-    def test_backup_single_env(self, tmp_path, capsys):
+    def test_put_single_env(self, tmp_path, capsys):
         config = _make_config(tmp_path)
         backup = EnvBackup(
             name="myenv",
@@ -176,17 +191,64 @@ class TestCmdBackup:
                 instance = MockFridge.return_value
                 instance.backup_env.return_value = backup
                 instance._backup_path.return_value = tmp_path / "myenv.json"
-                code = main(["backup", "myenv"])
+                code = main(["put", "myenv"])
         assert code == 0
 
-    def test_backup_single_env_error(self, tmp_path, capsys):
+    def test_put_single_env_error(self, tmp_path, capsys):
         config = _make_config(tmp_path)
         with patch("pyenv_fridge.cli.FridgeConfig.load", return_value=config):
             with patch("pyenv_fridge.cli.Fridge") as MockFridge:
                 instance = MockFridge.return_value
                 instance.backup_env.side_effect = RuntimeError("test error")
-                code = main(["backup", "myenv"])
+                code = main(["put", "myenv"])
         assert code == 1
+
+    def test_backup_alias_works(self, tmp_path, capsys):
+        config = _make_config(tmp_path)
+        backups = [
+            EnvBackup(name="env1", python_version="3.11.5", packages=[]),
+        ]
+        with patch("pyenv_fridge.cli.FridgeConfig.load", return_value=config):
+            with patch("pyenv_fridge.cli.Fridge") as MockFridge:
+                instance = MockFridge.return_value
+                instance.backup_all.return_value = backups
+                instance._backup_path = MagicMock()
+                code = main(["backup"])
+        assert code == 0
+
+
+# ---------------------------------------------------------------------------
+# cmd_get (formerly cmd_restore)
+# ---------------------------------------------------------------------------
+
+
+class TestCmdGet:
+    def test_get_env(self, tmp_path, capsys):
+        config = _make_config(tmp_path)
+        with patch("pyenv_fridge.cli.FridgeConfig.load", return_value=config):
+            with patch("pyenv_fridge.cli.Fridge") as MockFridge:
+                instance = MockFridge.return_value
+                instance.restore_env.return_value = None
+                code = main(["get", "myenv"])
+        assert code == 0
+
+    def test_get_env_not_found(self, tmp_path, capsys):
+        config = _make_config(tmp_path)
+        with patch("pyenv_fridge.cli.FridgeConfig.load", return_value=config):
+            with patch("pyenv_fridge.cli.Fridge") as MockFridge:
+                instance = MockFridge.return_value
+                instance.restore_env.side_effect = FileNotFoundError("No backup")
+                code = main(["get", "myenv"])
+        assert code == 1
+
+    def test_restore_alias_works(self, tmp_path, capsys):
+        config = _make_config(tmp_path)
+        with patch("pyenv_fridge.cli.FridgeConfig.load", return_value=config):
+            with patch("pyenv_fridge.cli.Fridge") as MockFridge:
+                instance = MockFridge.return_value
+                instance.restore_env.return_value = None
+                code = main(["restore", "myenv"])
+        assert code == 0
 
 
 # ---------------------------------------------------------------------------
@@ -251,6 +313,11 @@ class TestCmdConfig:
         assert "Unknown config key" in captured.err
 
 
+# ---------------------------------------------------------------------------
+# cmd_setup
+# ---------------------------------------------------------------------------
+
+
 class TestCmdSetup:
     def test_setup_default_windows_backend_hint(self, tmp_path, capsys):
         config = _make_config(tmp_path)
@@ -270,11 +337,38 @@ class TestCmdSetup:
         captured = capsys.readouterr()
         assert "pyenv-virtualenv" in captured.out
 
-    def test_setup_install_package_manager_for_pip(self, tmp_path, capsys):
+    def test_setup_uv_backend_not_installed(self, tmp_path, capsys):
         config = _make_config(tmp_path)
-        with patch("pyenv_fridge.cli.FridgeConfig.load", return_value=config):
+        config.backend = "uv"
+        config.package_manager = "uv"
+        with patch("pyenv_fridge.cli.FridgeConfig.load", return_value=config), \
+             patch("pyenv_fridge.cli._is_command_available", return_value=False):
+            code = main(["setup"])
+        assert code == 0
+        captured = capsys.readouterr()
+        assert "NOT FOUND" in captured.out
+        assert "fridge setup --install" in captured.out
+
+    def test_setup_uv_backend_installed(self, tmp_path, capsys):
+        config = _make_config(tmp_path)
+        config.backend = "uv"
+        config.package_manager = "uv"
+        mock_result = MagicMock()
+        mock_result.stdout = "uv 0.5.0"
+        with patch("pyenv_fridge.cli.FridgeConfig.load", return_value=config), \
+             patch("pyenv_fridge.cli._is_command_available", return_value=True), \
+             patch("pyenv_fridge.cli.subprocess.run", return_value=mock_result):
+            code = main(["setup"])
+        assert code == 0
+        captured = capsys.readouterr()
+        assert "uv 0.5.0" in captured.out
+
+    def test_setup_install_pip(self, tmp_path, capsys):
+        config = _make_config(tmp_path)
+        with patch("pyenv_fridge.cli.FridgeConfig.load", return_value=config), \
+             patch("pyenv_fridge.cli._is_command_available", return_value=False):
             with patch("pyenv_fridge.cli.subprocess.run") as mock_run:
-                code = main(["setup", "--install-package-manager"])
+                code = main(["setup", "--install"])
         assert code == 0
         mock_run.assert_called_once()
         args = mock_run.call_args[0][0]
@@ -282,11 +376,11 @@ class TestCmdSetup:
         captured = capsys.readouterr()
         assert "pip bootstrap complete" in captured.out
 
-    def test_setup_install_package_manager_custom_pm_fails(self, tmp_path, capsys):
+    def test_setup_install_package_manager_backward_compat(self, tmp_path, capsys):
         config = _make_config(tmp_path)
-        config.package_manager = "conda"
-        with patch("pyenv_fridge.cli.FridgeConfig.load", return_value=config):
-            code = main(["setup", "--install-package-manager"])
-        assert code == 1
-        captured = capsys.readouterr()
-        assert "currently supported only for 'pip'" in captured.err
+        with patch("pyenv_fridge.cli.FridgeConfig.load", return_value=config), \
+             patch("pyenv_fridge.cli._is_command_available", return_value=False):
+            with patch("pyenv_fridge.cli.subprocess.run") as mock_run:
+                code = main(["setup", "--install-package-manager"])
+        assert code == 0
+        mock_run.assert_called_once()

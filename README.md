@@ -16,6 +16,7 @@ cloud-synced folder) so you can carry your environments across machines.
 
 - [Features](#features)
 - [Installation](#installation)
+- [Prerequisites](#prerequisites)
 - [Quick start](#quick-start)
 - [CLI reference](#cli-reference)
 - [Configuration](#configuration)
@@ -60,6 +61,65 @@ pip install .
 ```
 
 The only runtime dependency is the Python standard library (≥ 3.9).
+
+---
+
+## Prerequisites
+
+`pyenv-fridge` delegates environment creation to an external backend.
+Install the one that matches your platform **before** running `fridge restore`.
+
+### Windows – pyenv-win-venv
+
+[pyenv-win-venv](https://github.com/pyenv-win/pyenv-win-venv) provides the
+`pyenv-venv` CLI used by the default Windows backend.
+
+**Requires:** [pyenv-win](https://github.com/pyenv-win/pyenv-win) already
+installed and on your PATH.
+
+**Option A – PowerShell installer (recommended):**
+
+```powershell
+Invoke-WebRequest -UseBasicParsing -Uri "https://raw.githubusercontent.com/pyenv-win/pyenv-win-venv/main/bin/install-pyenv-win-venv.ps1" -OutFile "$HOME\install-pyenv-win-venv.ps1"; &"$HOME\install-pyenv-win-venv.ps1"
+```
+
+**Option B – Git clone:**
+
+```powershell
+git clone https://github.com/pyenv-win/pyenv-win-venv "$HOME\.pyenv-win-venv"
+# Add the bin directory to your user PATH:
+[System.Environment]::SetEnvironmentVariable('path', $env:USERPROFILE + "\.pyenv-win-venv\bin;" + [System.Environment]::GetEnvironmentVariable('path', "User"), "User")
+```
+
+After installation, open a **new** terminal and verify:
+
+```powershell
+pyenv-venv --version
+```
+
+Optionally, add `pyenv-venv init` to your PowerShell `$PROFILE` for automatic
+environment activation.
+
+### Linux / macOS – pyenv-virtualenv
+
+Install the [pyenv-virtualenv](https://github.com/pyenv/pyenv-virtualenv)
+plugin. If you installed pyenv via Homebrew:
+
+```bash
+brew install pyenv-virtualenv
+```
+
+Otherwise, clone into your pyenv plugins directory:
+
+```bash
+git clone https://github.com/pyenv/pyenv-virtualenv.git "$(pyenv root)/plugins/pyenv-virtualenv"
+```
+
+Add the init hook to your shell profile:
+
+```bash
+eval "$(pyenv virtualenv-init -)"
+```
 
 ---
 

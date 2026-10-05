@@ -38,9 +38,26 @@ class PackageManager(ABC):
 
     @abstractmethod
     def install_packages(
-        self, python_executable: str, packages: List[PackageInfo]
-    ) -> None:
-        """Install *packages* into the environment identified by *python_executable*."""
+        self,
+        python_executable: str,
+        packages: List[PackageInfo],
+        *,
+        no_deps: bool = False,
+    ) -> List[str]:
+        """Install *packages* into the environment identified by *python_executable*.
+
+        Parameters
+        ----------
+        no_deps:
+            If *True*, skip dependency resolution (``--no-deps``).  Useful when
+            restoring a full snapshot where all transitive dependencies are
+            already pinned.
+
+        Returns
+        -------
+        list of str
+            Package specs that failed to install (empty if all succeeded).
+        """
 
     @property
     def name(self) -> str:

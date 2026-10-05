@@ -91,12 +91,19 @@ class PipPackageManager(PackageManager):
         return parse_pip_freeze(result.stdout)
 
     def install_packages(
-        self, python_executable: str, packages: List[PackageInfo]
-    ) -> None:
+        self,
+        python_executable: str,
+        packages: List[PackageInfo],
+        *,
+        no_deps: bool = False,
+    ) -> List[str]:
         """Install *packages* using pip.
 
         Only packages with ``install_method == "pip"`` are installed; others
         are skipped with a warning printed to stdout.
+
+        If the bulk install fails, packages are retried individually so that
+        one broken package does not prevent the rest from being installed.
 
         Parameters
         ----------
@@ -104,6 +111,13 @@ class PipPackageManager(PackageManager):
             Absolute path to the Python interpreter whose pip will be used.
         packages:
             List of packages to install.
+        no_deps:
+            If *True*, pass ``--no-deps`` to skip dependency resolution.
+
+        Returns
+        -------
+        list of str
+            Package specs that failed to install.
         """
         pip_packages = []
         for pkg in packages:
@@ -117,9 +131,34 @@ class PipPackageManager(PackageManager):
             pip_packages.append(spec)
 
         if not pip_packages:
-            return
+            return []
 
-        subprocess.run(
-            [python_executable, "-m", "pip", "install", *pip_packages],
-            check=True,
+        base_cmd = [python_executable, "-m", "pip", "install"]
+        if no_deps:
+            base_cmd.append("--no-deps")
+
+        # Try bulk install first
+        result = subprocess.run(base_cmd + pip_packages)
+        if result.returncode == 0:
+            return []
+
+        # Bulk install failed -- retry each package individually
+        print(
+            f"  [warn] Bulk install failed. "
+            f"Retrying {len(pip_packages)} packages individually ..."
         )
+        failed: List[str] = []
+        for i, spec in enumerate(pip_packages, 1):
+            print(f"  [{i}/{len(pip_packages)}] {spec} ... ", end="", flush=True)
+            r = subprocess.run(
+                base_cmd + [spec],
+                capture_output=True,
+                text=True,
+            )
+            if r.returncode != 0:
+                print("FAILED")
+                failed.append(spec)
+            else:
+                print("ok")
+
+        return failed

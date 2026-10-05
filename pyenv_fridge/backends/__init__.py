@@ -15,10 +15,12 @@ from typing import Dict, Type
 from pyenv_fridge.backends.base import VirtualenvBackend
 from pyenv_fridge.backends.pyenv_venv_win import PyenvVenvWinBackend
 from pyenv_fridge.backends.pyenv_virtualenv import PyenvVirtualenvBackend
+from pyenv_fridge.backends.uv import UvBackend
 
 _REGISTRY: Dict[str, Type[VirtualenvBackend]] = {
     "pyenv-venv-win": PyenvVenvWinBackend,
     "pyenv-virtualenv": PyenvVirtualenvBackend,
+    "uv": UvBackend,
 }
 
 

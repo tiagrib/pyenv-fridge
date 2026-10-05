@@ -168,6 +168,8 @@ class Fridge:
         *,
         create_if_missing: bool = True,
         reinstall: bool = False,
+        no_deps: bool = False,
+        python_version: Optional[str] = None,
     ) -> None:
         """Restore a virtual environment from its backup snapshot.
 
@@ -183,6 +185,11 @@ class Fridge:
             If *True* packages are installed even if the env already exists.
             Ignored when *create_if_missing* is *True* and the env is newly
             created.
+        no_deps:
+            If *True*, skip dependency resolution when installing packages.
+        python_version:
+            Override the Python version used when creating the environment.
+            If *None* (default), the version recorded in the backup is used.
 
         Raises
         ------
@@ -196,6 +203,7 @@ class Fridge:
             )
 
         backup = EnvBackup.from_file(str(backup_path))
+        target_python = python_version or backup.python_version
         python_exe = self.backend.get_python_executable(env_name)
 
         env_exists = Path(python_exe).exists()
@@ -203,9 +211,25 @@ class Fridge:
             if create_if_missing:
                 print(
                     f"  Creating environment '{env_name}' "
-                    f"(Python {backup.python_version}) ..."
+                    f"(Python {target_python}) ..."
                 )
-                self.backend.create_env(env_name, backup.python_version)
+                self.backend.create_env(env_name, target_python)
+                # Re-resolve: the env may have been created in a different
+                # location than the pre-creation fallback path predicted.
+                python_exe = self.backend.get_python_executable(env_name)
+                actual_version = self.backend.get_python_version(env_name)
+                # Compare major.minor to catch silent fallback to a
+                # different Python (e.g. pyenv-venv using the global
+                # version when the requested one is not installed).
+                target_minor = ".".join(target_python.split(".")[:2])
+                actual_minor = ".".join(actual_version.split(".")[:2])
+                if actual_minor != target_minor:
+                    raise RuntimeError(
+                        f"Requested Python {target_python} but the "
+                        f"environment was created with Python "
+                        f"{actual_version}. Install the required "
+                        f"version first: pyenv install {target_python}"
+                    )
             else:
                 raise RuntimeError(
                     f"Environment '{env_name}' does not exist and "
@@ -214,8 +238,69 @@ class Fridge:
 
         if not env_exists or reinstall:
             print(f"  Installing {len(backup.packages)} packages into '{env_name}' ...")
-            self.package_manager.install_packages(python_exe, backup.packages)
+            failed = self.package_manager.install_packages(
+                python_exe, backup.packages, no_deps=no_deps
+            )
+            if failed:
+                print(f"  [warn] {len(failed)} package(s) failed to install:")
+                for spec in failed:
+                    print(f"    - {spec}")
+                print(f"  [ok] Environment '{env_name}' restored (with errors).")
+                return
         print(f"  [ok] Environment '{env_name}' restored.")
+
+    def update_python_version(
+        self,
+        to_version: str,
+        *,
+        env_name: Optional[str] = None,
+        from_version: Optional[str] = None,
+    ) -> List[EnvBackup]:
+        """Update the Python version in stored backup files.
+
+        Parameters
+        ----------
+        to_version:
+            The new Python version string to write.
+        env_name:
+            If given, update only this environment's backup.
+        from_version:
+            If given, only update backups whose current Python version matches.
+            Ignored when *env_name* is provided.
+
+        Returns
+        -------
+        list of EnvBackup
+            The backups that were modified.
+
+        Raises
+        ------
+        FileNotFoundError
+            If *env_name* is given but no backup exists for it.
+        """
+        if env_name is not None:
+            backup_path = self._backup_path(env_name)
+            if not backup_path.exists():
+                raise FileNotFoundError(
+                    f"No backup found for environment {env_name!r} "
+                    f"(expected {backup_path})"
+                )
+            backup = EnvBackup.from_file(str(backup_path))
+            if backup.python_version == to_version:
+                return []
+            backup.python_version = to_version
+            backup.save(str(backup_path))
+            return [backup]
+
+        # Bulk mode: update all backups matching from_version
+        updated: List[EnvBackup] = []
+        for backup in self.list_backups():
+            if from_version is not None and backup.python_version != from_version:
+                continue
+            backup.python_version = to_version
+            backup.save(str(self._backup_path(backup.name)))
+            updated.append(backup)
+        return updated
 
     def diff_env(
         self,

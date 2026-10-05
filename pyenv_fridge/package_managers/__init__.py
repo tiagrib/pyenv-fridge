@@ -14,9 +14,11 @@ from typing import Dict, Type
 
 from pyenv_fridge.package_managers.base import PackageManager
 from pyenv_fridge.package_managers.pip import PipPackageManager
+from pyenv_fridge.package_managers.uv import UvPackageManager
 
 _REGISTRY: Dict[str, Type[PackageManager]] = {
     "pip": PipPackageManager,
+    "uv": UvPackageManager,
 }
 
 

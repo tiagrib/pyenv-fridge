@@ -13,6 +13,7 @@ from pyenv_fridge.backends.pyenv_venv_win import (
     _pyenv_root,
 )
 from pyenv_fridge.backends.pyenv_virtualenv import PyenvVirtualenvBackend
+from pyenv_fridge.backends.uv import UvBackend
 
 
 # ---------------------------------------------------------------------------
@@ -25,6 +26,7 @@ class TestBackendRegistry:
         backends = list_backends()
         assert "pyenv-venv-win" in backends
         assert "pyenv-virtualenv" in backends
+        assert "uv" in backends
 
     def test_get_backend_pyenv_venv_win(self):
         backend = get_backend("pyenv-venv-win")
@@ -33,6 +35,10 @@ class TestBackendRegistry:
     def test_get_backend_pyenv_virtualenv(self):
         backend = get_backend("pyenv-virtualenv")
         assert isinstance(backend, PyenvVirtualenvBackend)
+
+    def test_get_backend_uv(self):
+        backend = get_backend("uv")
+        assert isinstance(backend, UvBackend)
 
     def test_get_backend_unknown_raises(self):
         with pytest.raises(ValueError, match="Unknown virtualenv backend"):
@@ -210,3 +216,76 @@ class TestPyenvVirtualenvBackend:
         envs = backend._list_envs_from_filesystem()
         assert "myenv" in envs
         assert "3.11.5" not in envs
+
+
+# ---------------------------------------------------------------------------
+# UvBackend
+# ---------------------------------------------------------------------------
+
+
+class TestUvBackend:
+    def _make_backend(self, tmp_path: Path) -> UvBackend:
+        return UvBackend(envs_root=tmp_path / "uv-envs")
+
+    def test_name(self, tmp_path):
+        backend = self._make_backend(tmp_path)
+        assert backend.name == "uv"
+
+    def test_list_envs_empty(self, tmp_path):
+        backend = self._make_backend(tmp_path)
+        assert backend.list_envs() == []
+
+    def test_list_envs_with_dirs(self, tmp_path):
+        envs_root = tmp_path / "uv-envs"
+        envs_root.mkdir(parents=True)
+        (envs_root / "myenv").mkdir()
+        (envs_root / "another").mkdir()
+        backend = self._make_backend(tmp_path)
+        envs = backend.list_envs()
+        assert "myenv" in envs
+        assert "another" in envs
+        assert envs == sorted(envs)
+
+    def test_get_python_executable(self, tmp_path):
+        backend = self._make_backend(tmp_path)
+        exe = backend.get_python_executable("myenv")
+        assert "myenv" in exe
+        assert "python" in exe.lower()
+
+    def test_get_python_version_parses_output(self, tmp_path, mocker):
+        mock_result = mocker.MagicMock()
+        mock_result.stdout = "Python 3.12.0"
+        mock_result.stderr = ""
+        mocker.patch(
+            "pyenv_fridge.backends.uv.subprocess.run",
+            return_value=mock_result,
+        )
+        backend = self._make_backend(tmp_path)
+        version = backend.get_python_version("myenv")
+        assert version == "3.12.0"
+
+    def test_get_python_version_fallback_on_error(self, tmp_path, mocker):
+        mocker.patch(
+            "pyenv_fridge.backends.uv.subprocess.run",
+            side_effect=FileNotFoundError,
+        )
+        backend = self._make_backend(tmp_path)
+        version = backend.get_python_version("myenv")
+        assert version == "unknown"
+
+    def test_create_env_calls_uv(self, tmp_path, mocker):
+        mock_run = mocker.patch("pyenv_fridge.backends.uv.subprocess.run")
+        backend = self._make_backend(tmp_path)
+        backend.create_env("newenv", "3.12.0")
+        assert mock_run.call_count == 2
+        # First call: uv python install
+        first_call = mock_run.call_args_list[0][0][0]
+        assert "uv" in first_call
+        assert "python" in first_call
+        assert "install" in first_call
+        assert "3.12.0" in first_call
+        # Second call: uv venv
+        second_call = mock_run.call_args_list[1][0][0]
+        assert "uv" in second_call
+        assert "venv" in second_call
+        assert "3.12.0" in second_call
